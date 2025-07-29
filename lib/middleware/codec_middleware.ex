@@ -30,15 +30,11 @@ defmodule Bytes.Rpc.CodecMiddleware do
   def pre(_), do: {:error, :invalid_format}
 
   @spec post(map(), any()) :: Response.t()
+  def post(_ctx, :ok), do: %Response{code: 0, message: "success"}
+  def post(_ctx, {:ok, data}), do: %Response{code: 0, data: Json.encode(data)}
+  def post(_ctx, {:error, reason}), do: %Response{code: 1, message: to_string(reason)}
   def post(_ctx, %Response{} = resp), do: resp
-
-  def post(_ctx, {:ok, data}) do
-    %Response{code: 0, data: Json.encode(data)}
-  end
-
-  def post(_ctx, {:error, reason}) do
-    %Response{code: 1, message: to_string(reason)}
-  end
+  def post(_ctx, _), do: %Response{code: 0}
 
   defp parse_atom(str) when is_binary(str), do: {:ok, String.to_atom(str)}
   defp parse_atom(atom) when is_atom(atom), do: {:ok, atom}
