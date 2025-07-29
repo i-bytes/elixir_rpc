@@ -33,7 +33,8 @@ defmodule Bytes.Rpc.Server.Dispatcher do
               [RpcDispatcher] Exception in #{service}.#{event}:
               #{Exception.format(:error, error, __STACKTRACE__)}
               """)
-              %Response{ code: 501, message: "Event not supported"}
+
+              %Response{code: 501, message: "Event not supported"}
           end
 
         Middleware.process_response(ctx, result)

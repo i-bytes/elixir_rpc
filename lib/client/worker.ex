@@ -131,6 +131,7 @@ defmodule Bytes.Client.Worker do
   end
 
   defp maybe_schedule_connect(%{connecting: true} = state), do: state
+
   defp maybe_schedule_connect(state) do
     send(self(), :connect)
     %{state | connecting: true}
