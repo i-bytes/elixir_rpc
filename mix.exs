@@ -21,9 +21,9 @@ defmodule ElixirGrpc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:jason, "~> 1.4"},
-      {:grpc, "~> 0.10.1"},
-      {:protobuf, "~> 0.14.1"},
+      {:jason, "~> 1.2"},
+      {:grpc, "~> 0.5.0"},
+      {:protobuf, "~> 0.11.0"},
       {:poolboy, "~> 1.5"}
     ]
   end
