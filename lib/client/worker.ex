@@ -84,7 +84,7 @@ defmodule Bytes.Client.Worker do
 
     case Stub.dispatcher(channel, request) do
       {:ok, %Response{code: code, message: msg, data: data}} ->
-        {:reply, {:ok, %{code: code, message: msg, data: Json.decode!(data)}}, state}
+        {:reply, {:ok, %{code: code, error: msg, data: Json.decode!(data)}}, state}
 
       {:error, reason} ->
         Logger.warning("[RpcWorker:#{node}] RPC failed: #{inspect(reason)}")
