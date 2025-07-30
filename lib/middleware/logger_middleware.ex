@@ -29,19 +29,9 @@ defmodule Bytes.Rpc.LoggerMiddleware do
 
   def pre(_), do: {:error, :invalid_request}
 
-  def post(ctx, %Response{} = resp) do
+  def post(ctx, resp) do
     log_response(ctx, resp)
     resp
-  end
-
-  def post(ctx, {:ok, data}) do
-    log_response(ctx, data)
-    {:ok, data}
-  end
-
-  def post(ctx, {:error, error}) do
-    log_response(ctx, error)
-    {:error, error}
   end
 
   defp log_response(%Context{meta: %{service: service, event: event, node: node}} = ctx, data) do
