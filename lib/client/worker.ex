@@ -72,12 +72,12 @@ defmodule Bytes.Client.Worker do
   end
 
   def handle_call(
-        {:rpc_call, service, event, header, body},
+        {:rpc_call, module, event, header, body},
         _from,
         %{channel: channel, node: node} = state
       ) do
     request = %Request{
-      meta: %Meta{service: service, event: event, node: node},
+      meta: %Meta{module: module, event: event, node: node},
       header: Json.encode(header),
       body: Json.encode(body)
     }
@@ -101,11 +101,11 @@ defmodule Bytes.Client.Worker do
   end
 
   def handle_cast(
-        {:rpc_cast, service, event, header, body},
+        {:rpc_cast, module, event, header, body},
         %{channel: channel, node: node} = state
       ) do
     request = %Request{
-      meta: %Meta{service: service, event: event, node: node},
+      meta: %Meta{module: module, event: event, node: node},
       header: Json.encode(header),
       body: Json.encode(body)
     }

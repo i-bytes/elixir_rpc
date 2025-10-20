@@ -13,13 +13,13 @@ defmodule Bytes.Rpc.CodecMiddleware do
   alias Bytes.Rpc.{Context, Request, Response, Json}
 
   @spec pre(any()) :: {:ok, map()} | {:error, any()}
-  def pre(%Request{meta: %{service: s, event: e, node: node}, header: h, body: payload}) do
+  def pre(%Request{meta: %{module: m, event: e, node: node}, header: h, body: payload}) do
     with {:ok, event} <- parse_atom(e),
-         {:ok, service} <- parse_atom(s),
+         {:ok, module} <- parse_atom(m),
          {:ok, body} <- Json.decode(payload),
          {:ok, header} <- Json.decode(h) do
       {:ok,
-       %Context{meta: %{service: service, event: event, node: node}, header: header, body: body}}
+       %Context{meta: %{module: module, event: event, node: node}, header: header, body: body}}
     else
       {:error, reason} ->
         Logger.error("[rpc] decode failed for #{inspect(e)}: #{inspect(reason)}")

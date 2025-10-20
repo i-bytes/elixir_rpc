@@ -11,18 +11,17 @@ import Config
 
 config :elixir_rpc, Bytes.RpcServer,
   port: 50051,
-  services: [
-    internal: Bytes.Rpc.InternalService
-  ],
+  modules: [],
   middlewares: [
     Bytes.Rpc.CodecMiddleware,
     Bytes.Rpc.LoggerMiddleware
   ]
 
 config :elixir_rpc, Bytes.RpcClient,
-  server_nodes: [
-    {"node1", "localhost", 50051},
-    {"node2", "localhost", 50051}
+  servers: [
+    {:ws, [{"ws1", "localhost", 50051}, {"ws2", "localhost", 50051}]},
+    {:live, [{"live1", "localhost", 50051}]}
   ],
-  pool_size: 5,
+  timeout: 5000,
+  pool_size: 3,
   max_overflow: 2

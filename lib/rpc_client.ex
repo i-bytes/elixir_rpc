@@ -18,14 +18,22 @@ defmodule Bytes.RpcClient do
 
   def init(_) do
     config = Application.get_env(:elixir_rpc, __MODULE__, [])
-    nodes = Keyword.get(config, :server_nodes, [])
+    servers = Keyword.get(config, :servers, [])
     pool_size = Keyword.get(config, :pool_size, 5)
     max_overflow = Keyword.get(config, :max_overflow, 2)
 
-    registry = {Registry, Enum.map(nodes, fn {node, _, _} -> node end)}
+    server_nodes = servers |> Keyword.values() |> List.flatten()
+
+    server_names =
+      Enum.map(servers, fn {key, servers} ->
+        names = Enum.map(servers, fn {name, _host, _port} -> name end)
+        {key, names}
+      end)
+
+    registry = {Registry, server_names}
 
     pools =
-      Enum.map(nodes, fn {node, host, port} ->
+      Enum.map(server_nodes, fn {node, host, port} ->
         :poolboy.child_spec(
           pool_name(node),
           [
@@ -40,41 +48,41 @@ defmodule Bytes.RpcClient do
         )
       end)
 
-    children = [registry] ++ pools
+    children = pools ++ [registry]
     Supervisor.init(children, strategy: :one_for_one)
   end
 
   defp pool_name(node), do: String.to_atom("rpc_pool_#{node}")
 
-  def call(service, event, header \\ %{}, body \\ %{}) do
-    node = Dispatcher.choose_node(:random)
-    call(node, service, event, header, body)
+  def call(server, module, event, header \\ %{}, body \\ %{}) do
+    node = Dispatcher.choose_node(:random, server)
+    do_call(node, module, event, header, body)
   end
 
-  def call(node, service, event, header, body) do
+  def do_call(node, module, event, header, body) do
     :poolboy.transaction(
       pool_name(node),
       fn worker ->
-        Worker.rpc_call(worker, service, event, header, body)
+        Worker.rpc_call(worker, module, event, header, body)
       end,
       10_000
     )
   end
 
-  def cast(service, event, header \\ %{}, body \\ %{}) do
-    node = Dispatcher.choose_node(:random)
-    cast(node, service, event, header, body)
+  def cast(server, module, event, header \\ %{}, body \\ %{}) do
+    node = Dispatcher.choose_node(:random, server)
+    do_cast(node, module, event, header, body)
   end
 
-  def cast(node, service, event, header, body) do
+  def do_cast(node, module, event, header, body) do
     :poolboy.transaction(pool_name(node), fn worker ->
-      Worker.rpc_cast(worker, service, event, header, body)
+      Worker.rpc_cast(worker, module, event, header, body)
     end)
   end
 
-  def broadcast(service, event, header \\ %{}, body \\ %{}) do
-    for node <- Registry.healthy_nodes() do
-      Task.start(fn -> cast(node, service, event, header, body) end)
+  def broadcast(server, module, event, header \\ %{}, body \\ %{}) do
+    for node <- Registry.healthy_nodes(server) do
+      Task.start(fn -> do_cast(node, module, event, header, body) end)
     end
 
     :ok

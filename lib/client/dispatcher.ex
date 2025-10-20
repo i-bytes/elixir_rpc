@@ -8,8 +8,8 @@
 #  | Author: dangyuzhang <develop@bytes.net.cn>
 #  +----------------------------------------------------------------------
 defmodule Bytes.Client.Dispatcher do
-  def choose_node(:random) do
-    Bytes.Client.Registry.healthy_nodes()
+  def choose_node(:random, server) do
+    Bytes.Client.Registry.healthy_nodes(server)
     |> Enum.random()
   end
 end

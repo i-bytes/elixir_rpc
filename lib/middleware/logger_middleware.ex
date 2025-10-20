@@ -11,16 +11,16 @@ defmodule Bytes.Rpc.LoggerMiddleware do
   @behaviour Bytes.Rpc.Middleware
 
   require Logger
-  alias Bytes.Rpc.{Context, Response}
+  alias Bytes.Rpc.{Context}
 
   def pre(%Context{header: header, body: body} = ctx) do
     trace_id = extract_or_generate_trace_id(header)
     start_time = System.monotonic_time()
-    %{service: service, event: event, node: node} = ctx.meta
+    %{module: module, event: event, node: node} = ctx.meta
 
     Task.start(fn ->
       Logger.info(
-        "[RPC] Incoming #{node}.#{service}.#{event}.#{trace_id} -> header=#{inspect(header)}, request=#{inspect(body)}"
+        "[RPC] Incoming #{node}.#{module}.#{event}.#{trace_id} -> header=#{inspect(header)}, request=#{inspect(body)}"
       )
     end)
 
@@ -34,14 +34,14 @@ defmodule Bytes.Rpc.LoggerMiddleware do
     resp
   end
 
-  defp log_response(%Context{meta: %{service: service, event: event, node: node}} = ctx, data) do
+  defp log_response(%Context{meta: %{module: module, event: event, node: node}} = ctx, data) do
     trace_id = ctx.trace_id
     start_time = ctx.request_time || System.monotonic_time()
     duration = System.monotonic_time() - start_time
 
     Task.start(fn ->
       Logger.info(
-        "[RPC] Outgoing #{node}.#{service}.#{event}.#{trace_id} -> response=#{inspect(data)}, time=#{duration}μs"
+        "[RPC] Outgoing #{node}.#{module}.#{event}.#{trace_id} -> response=#{inspect(data)}, time=#{duration}μs"
       )
     end)
   end

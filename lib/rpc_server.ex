@@ -34,15 +34,15 @@ defmodule Bytes.RpcServer do
     config = Application.get_env(:elixir_rpc, __MODULE__, [])
 
     port = Keyword.get(config, :port, @default_port)
-    services = Map.new(Keyword.get(config, :services, []))
+    modules = Map.new(Keyword.get(config, :modules, []))
     middlewares = Keyword.get(config, :middlewares, @default_middlewares)
 
     Logger.info("[RpcServer] Starting gRPC server on port #{port}")
 
-    with :ok <- Cache.init_cache(services, middlewares),
+    with :ok <- Cache.init_cache(modules, middlewares),
          {:ok, pid, _ref} <- GRPC.Server.start(Dispatcher, port) do
       Logger.info("[RpcServer] gRPC server started (PID: #{inspect(pid)})")
-      {:ok, %{port: port, pid: pid, services: services, middlewares: middlewares}}
+      {:ok, %{port: port, pid: pid, modules: modules, middlewares: middlewares}}
     else
       {:error, reason} ->
         Logger.error("[RpcServer] Failed to start gRPC server: #{inspect(reason)}")

@@ -4,7 +4,7 @@ package bytes.rpc;
 
 message Meta {
     string node = 1;
-    string service = 2;
+    string module = 2;
     string event = 3;
 }
 
