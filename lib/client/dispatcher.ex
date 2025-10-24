@@ -9,7 +9,9 @@
 #  +----------------------------------------------------------------------
 defmodule Bytes.Client.Dispatcher do
   def choose_node(:random, server) do
-    Bytes.Client.Registry.healthy_nodes(server)
-    |> Enum.random()
+    case Bytes.Client.Registry.healthy_nodes(server) do
+      [] -> {:error, "No service available"}
+      nodes -> {:ok, Enum.random(nodes)}
+    end
   end
 end
