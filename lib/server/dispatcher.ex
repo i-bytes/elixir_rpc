@@ -14,7 +14,7 @@ defmodule Bytes.Rpc.Server.Dispatcher do
   alias Bytes.Rpc.{Context, Response, Request}
   alias Bytes.Rpc.Server.{Middleware, Cache}
 
-  @ok %Response{code: 0}
+  @ok %Response{code: 200}
   @error %Response{code: 500, message: "Internal Server Error"}
   @bad_request %Response{code: 400, message: "Bad Request"}
   @not_supported %Response{code: 501, message: "Event not supported"}
