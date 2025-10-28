@@ -48,7 +48,7 @@ defmodule Bytes.Client.Registry do
     healthy =
       try do
         case Bytes.RpcClient.call(node, "__internal__", "heartbeat", %{}, %{}) do
-          {:ok, %{code: 0}} -> true
+          {:ok, %{code: 200}} -> true
           _ -> false
         end
       rescue
