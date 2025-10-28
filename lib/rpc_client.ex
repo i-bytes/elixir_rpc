@@ -55,8 +55,10 @@ defmodule Bytes.RpcClient do
   defp pool_name(node), do: String.to_atom("rpc_pool_#{node}")
 
   def call(server, module, event, header \\ %{}, body \\ %{}) do
-    node = Dispatcher.choose_node(:random, server)
-    do_call(node, module, event, header, body)
+    case Dispatcher.choose_node(:random, server) do
+      {:ok, node} -> do_call(node, module, event, header, body)
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def do_call(node, module, event, header, body) do
@@ -70,8 +72,10 @@ defmodule Bytes.RpcClient do
   end
 
   def cast(server, module, event, header \\ %{}, body \\ %{}) do
-    node = Dispatcher.choose_node(:random, server)
-    do_cast(node, module, event, header, body)
+    case Dispatcher.choose_node(:random, server) do
+      {:ok, node} -> do_cast(node, module, event, header, body)
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def do_cast(node, module, event, header, body) do

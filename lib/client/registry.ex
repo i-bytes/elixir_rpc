@@ -78,7 +78,7 @@ defmodule Bytes.Client.Registry do
   defp safe_heartbeat(node) do
     try do
       case Bytes.RpcClient.do_call(node, "__internal__", "heartbeat", %{}, %{}) do
-        {:ok, %{code: 0}} -> {:ok, true}
+        {:ok, %{code: 200}} -> {:ok, true}
         _ -> {:ok, false}
       end
     rescue
