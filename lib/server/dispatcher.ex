@@ -16,7 +16,7 @@ defmodule Bytes.Rpc.Server.Dispatcher do
 
   @spec dispatcher(Request.t(), GRPC.Server.Stream.t()) :: Response.t()
   def dispatcher(%Request{meta: %{service: "__internal__", event: "heartbeat"}}, _stream) do
-    %Response{code: 0}
+    %Response{code: 200}
   end
 
   def dispatcher(%Request{} = req, _stream) do
