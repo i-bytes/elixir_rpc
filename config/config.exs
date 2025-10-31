@@ -18,6 +18,7 @@ config :elixir_rpc, Bytes.RpcServer,
   ]
 
 config :elixir_rpc, Bytes.RpcClient,
+  name: "client",
   servers: [
     {:ws, [{"ws1", "localhost", 50051}, {"ws2", "localhost", 50051}]},
     {:live, [{"live1", "localhost", 50051}]}

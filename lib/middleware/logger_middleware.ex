@@ -19,9 +19,15 @@ defmodule Bytes.Rpc.LoggerMiddleware do
     %{module: module, event: event, node: node} = ctx.meta
 
     Task.start(fn ->
-      Logger.info(
-        "[RPC] Incoming #{node}.#{module}.#{event}.#{trace_id} -> header=#{inspect(header)}, request=#{inspect(body)}"
-      )
+      Logger.info(%{
+        action: :rpc_request,
+        id: trace_id,
+        from: node,
+        module: module,
+        event: event,
+        header: header,
+        request: body
+      })
     end)
 
     {:ok, %Context{ctx | request_time: start_time, trace_id: trace_id}}
@@ -40,9 +46,15 @@ defmodule Bytes.Rpc.LoggerMiddleware do
     duration = System.monotonic_time() - start_time
 
     Task.start(fn ->
-      Logger.info(
-        "[RPC] Outgoing #{node}.#{module}.#{event}.#{trace_id} -> response=#{inspect(data)}, time=#{duration}μs"
-      )
+      Logger.info(%{
+        action: :rpc_response,
+        id: trace_id,
+        to: node,
+        module: module,
+        event: event,
+        response: data,
+        time: "#{duration}μs"
+      })
     end)
   end
 

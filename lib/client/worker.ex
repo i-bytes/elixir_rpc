@@ -31,7 +31,8 @@ defmodule Bytes.Client.Worker do
     state = %{
       host: Keyword.get(opts, :host),
       port: Keyword.get(opts, :port),
-      node: Keyword.get(opts, :node),
+      to: Keyword.get(opts, :to),
+      from: Keyword.get(opts, :from),
       channel: nil,
       connecting: true
     }
@@ -45,12 +46,12 @@ defmodule Bytes.Client.Worker do
 
     case GRPC.Stub.connect("#{state.host}:#{state.port}") do
       {:ok, channel} ->
-        Logger.info("[RpcWorker:#{state.node}] Connected to #{state.host}:#{state.port}")
+        Logger.info("[RpcWorker:#{state.from}] Connected to #{state.host}:#{state.port}")
         {:noreply, %{state | channel: channel, connecting: false}}
 
       {:error, reason} ->
         Logger.error(
-          "[RpcWorker:#{state.node}] Connection failed: #{inspect(reason)}. Retrying in #{@reconnect_interval}ms"
+          "[RpcWorker:#{state.from}] to #{state.to} Connection failed: #{inspect(reason)}. Retrying in #{@reconnect_interval}ms"
         )
 
         Process.send_after(self(), :connect, @reconnect_interval)
@@ -59,7 +60,7 @@ defmodule Bytes.Client.Worker do
   end
 
   def handle_info({:gun_down, _, _, :closed, []}, state) do
-    Logger.warning("[RpcWorker:#{state.node}] Disconnected from server, scheduling reconnect...")
+    Logger.warning("[RpcWorker:#{state.from}] Disconnected from server, scheduling reconnect...")
     {:noreply, maybe_schedule_connect(state)}
   end
 
@@ -74,10 +75,10 @@ defmodule Bytes.Client.Worker do
   def handle_call(
         {:rpc_call, module, event, header, body},
         _from,
-        %{channel: channel, node: node} = state
+        %{channel: channel, from: from, to: to} = state
       ) do
     request = %Request{
-      meta: %Meta{module: module, event: event, node: node},
+      meta: %Meta{module: module, event: event, node: from},
       header: Json.encode(header),
       body: Json.encode(body)
     }
@@ -87,7 +88,7 @@ defmodule Bytes.Client.Worker do
         {:reply, {:ok, %{code: code, error: msg, data: Json.decode!(data)}}, state}
 
       {:error, reason} ->
-        Logger.warning("[RpcWorker:#{node}] RPC failed: #{inspect(reason)}")
+        Logger.warning("[RpcWorker:#{from}] to #{to} RPC failed: #{inspect(reason)}")
         {:reply, {:error, reason}, maybe_schedule_connect(state)}
     end
   end
@@ -102,10 +103,10 @@ defmodule Bytes.Client.Worker do
 
   def handle_cast(
         {:rpc_cast, module, event, header, body},
-        %{channel: channel, node: node} = state
+        %{channel: channel, from: from, to: to} = state
       ) do
     request = %Request{
-      meta: %Meta{module: module, event: event, node: node},
+      meta: %Meta{module: module, event: event, node: from},
       header: Json.encode(header),
       body: Json.encode(body)
     }
@@ -114,7 +115,7 @@ defmodule Bytes.Client.Worker do
       try do
         Stub.dispatcher(channel, request)
       rescue
-        err -> Logger.error("[RpcWorker:#{node}] Cast failed: #{inspect(err)}")
+        err -> Logger.error("[RpcWorker:#{from}] to #{to} Cast failed: #{inspect(err)}")
       end
     end)
 
