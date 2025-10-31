@@ -21,6 +21,7 @@ defmodule Bytes.RpcClient do
     servers = Keyword.get(config, :servers, [])
     pool_size = Keyword.get(config, :pool_size, 5)
     max_overflow = Keyword.get(config, :max_overflow, 2)
+    from_name = Keyword.get(config, :name, "")
 
     server_nodes = servers |> Keyword.values() |> List.flatten()
 
@@ -42,9 +43,10 @@ defmodule Bytes.RpcClient do
             size: pool_size,
             max_overflow: max_overflow
           ],
-          node: node,
+          to: node,
           host: host,
-          port: port
+          port: port,
+          from: from_name
         )
       end)
 
