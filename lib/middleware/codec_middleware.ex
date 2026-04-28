@@ -36,7 +36,12 @@ defmodule Bytes.Rpc.CodecMiddleware do
   def post(_ctx, %Response{} = resp), do: resp
   def post(_ctx, _), do: %Response{code: 200}
 
-  defp parse_atom(str) when is_binary(str), do: {:ok, String.to_atom(str)}
+  defp parse_atom(str) when is_binary(str) do
+    {:ok, String.to_existing_atom(str)}
+  rescue
+    ArgumentError -> {:error, :unknown_atom}
+  end
+
   defp parse_atom(atom) when is_atom(atom), do: {:ok, atom}
   defp parse_atom(_), do: {:error, :invalid_atom}
 end

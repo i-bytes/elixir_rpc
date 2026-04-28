@@ -12,16 +12,33 @@ defmodule Bytes.Rpc.Json do
   def encode(data), do: data
 
   def decode(payload) do
-    case Jason.decode(payload, keys: :atoms) do
-      {:ok, data} -> {:ok, data}
+    case Jason.decode(payload) do
+      {:ok, data} -> {:ok, atomize_existing_keys(data)}
       _ -> {:ok, payload}
     end
   end
 
   def decode!(payload) do
-    case Jason.decode(payload, keys: :atoms) do
-      {:ok, data} -> data
+    case Jason.decode(payload) do
+      {:ok, data} -> atomize_existing_keys(data)
       {:error, _reason} -> payload
     end
+  end
+
+  defp atomize_existing_keys(data) when is_map(data) do
+    Map.new(data, fn {key, value} ->
+      {existing_atom_or_key(key), atomize_existing_keys(value)}
+    end)
+  end
+
+  defp atomize_existing_keys(data) when is_list(data),
+    do: Enum.map(data, &atomize_existing_keys/1)
+
+  defp atomize_existing_keys(data), do: data
+
+  defp existing_atom_or_key(key) when is_binary(key) do
+    String.to_existing_atom(key)
+  rescue
+    ArgumentError -> key
   end
 end

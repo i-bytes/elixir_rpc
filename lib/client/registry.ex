@@ -12,6 +12,8 @@ defmodule Bytes.Client.Registry do
   require Logger
 
   @check_interval 30_000
+  @initial_check_delay 500
+  @retry_check_interval 3_000
   @heartbeat_timeout 15_000
   @max_concurrency 10
 
@@ -25,7 +27,7 @@ defmodule Bytes.Client.Registry do
         {server, Map.new(nodes, &{&1, %{healthy: false}})}
       end)
 
-    send(self(), :check_nodes)
+    schedule_check(@initial_check_delay)
     {:ok, state}
   end
 
@@ -33,31 +35,40 @@ defmodule Bytes.Client.Registry do
   def handle_info(:check_nodes, state) do
     new_state =
       Map.new(state, fn {server, nodes} ->
-        updated_nodes =
-          nodes
-          |> Task.async_stream(
-            fn {node, info} -> check_heartbeat(node, info) end,
-            timeout: @heartbeat_timeout,
-            on_timeout: :kill_task,
-            max_concurrency: @max_concurrency
-          )
-          |> Enum.reduce(nodes, fn
-            {:ok, {node, updated_info}}, acc ->
-              Map.put(acc, node, updated_info)
-
-            {:exit, reason}, acc ->
-              Logger.error("[Registry] Heartbeat task failed: #{inspect(reason)}")
-              acc
-          end)
-
-        {server, updated_nodes}
+        {server, check_nodes(nodes)}
       end)
 
-    schedule_check()
+    schedule_check(next_check_interval(new_state))
     {:noreply, new_state}
   end
 
-  defp schedule_check, do: Process.send_after(self(), :check_nodes, @check_interval)
+  defp schedule_check(interval), do: Process.send_after(self(), :check_nodes, interval)
+
+  defp next_check_interval(state) do
+    if Enum.any?(state, fn {_server, nodes} -> healthy_nodes_from(nodes) == [] end) do
+      @retry_check_interval
+    else
+      @check_interval
+    end
+  end
+
+  defp check_nodes(nodes) do
+    nodes
+    |> Task.async_stream(
+      fn {node, info} -> check_heartbeat(node, info) end,
+      timeout: @heartbeat_timeout,
+      on_timeout: :kill_task,
+      max_concurrency: @max_concurrency
+    )
+    |> Enum.reduce(nodes, fn
+      {:ok, {node, updated_info}}, acc ->
+        Map.put(acc, node, updated_info)
+
+      {:exit, reason}, acc ->
+        Logger.error("[Registry] Heartbeat task failed: #{inspect(reason)}")
+        acc
+    end)
+  end
 
   defp check_heartbeat(node, %{healthy: old_healthy} = info) do
     healthy =
@@ -91,9 +102,61 @@ defmodule Bytes.Client.Registry do
   @doc "返回所有健康的节点名列表"
   def healthy_nodes(server), do: GenServer.call(__MODULE__, {:get_healthy, server})
 
+  def probe_healthy_node(server),
+    do: GenServer.call(__MODULE__, {:probe_healthy_node, server}, @heartbeat_timeout + 1_000)
+
+  def mark_node(node, healthy), do: GenServer.cast(__MODULE__, {:mark_node, node, healthy})
+
   @impl true
   def handle_call({:get_healthy, server}, _from, state) do
-    healthy_nodes = for {node, %{healthy: true}} <- Map.get(state, server, %{}), do: node
+    healthy_nodes = Map.get(state, server, %{}) |> healthy_nodes_from()
     {:reply, healthy_nodes, state}
+  end
+
+  @impl true
+  def handle_call({:probe_healthy_node, server}, _from, state) do
+    case Map.fetch(state, server) do
+      {:ok, nodes} ->
+        updated_nodes = check_nodes(nodes)
+
+        reply =
+          case healthy_nodes_from(updated_nodes) do
+            [] -> {:error, "No service available"}
+            nodes -> {:ok, Enum.random(nodes)}
+          end
+
+        {:reply, reply, Map.put(state, server, updated_nodes)}
+
+      :error ->
+        {:reply, {:error, "No service available"}, state}
+    end
+  end
+
+  @impl true
+  def handle_cast({:mark_node, node, healthy}, state) do
+    {:noreply, update_node_health(state, node, healthy)}
+  end
+
+  defp healthy_nodes_from(nodes) do
+    for {node, %{healthy: true}} <- nodes, do: node
+  end
+
+  defp update_node_health(state, node, healthy) do
+    Map.new(state, fn {server, nodes} ->
+      {server,
+       if Map.has_key?(nodes, node) do
+         Map.update!(nodes, node, fn info ->
+           if info.healthy != healthy do
+             Logger.warning(
+               "[Registry] Node #{inspect(node)} health changed: #{info.healthy} → #{healthy}"
+             )
+           end
+
+           %{info | healthy: healthy}
+         end)
+       else
+         nodes
+       end}
+    end)
   end
 end
