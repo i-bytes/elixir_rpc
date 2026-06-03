@@ -71,6 +71,32 @@ defmodule Bytes.RpcClient do
     end
   end
 
+  def call_all(server, module, event, header \\ %{}, body \\ %{}) do
+    case all_nodes(server) do
+      {:ok, nodes} ->
+        stream =
+          Task.async_stream(
+            nodes,
+            fn node -> {node, do_call(node, module, event, header, body)} end,
+            timeout: timeout(),
+            on_timeout: :kill_task
+          )
+
+        results =
+          nodes
+          |> Enum.zip(stream)
+          |> Enum.map(fn
+            {_node, {:ok, result}} -> result
+            {node, {:exit, reason}} -> {node, {:error, reason}}
+          end)
+
+        {:ok, results}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   def do_call(node, module, event, header, body) do
     timeout = timeout()
 
@@ -87,6 +113,18 @@ defmodule Bytes.RpcClient do
     case choose_node(server) do
       {:ok, node} -> do_cast(node, module, event, header, body)
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def cast_all(server, module, event, header \\ %{}, body \\ %{}) do
+    case all_nodes(server) do
+      {:ok, nodes} ->
+        Enum.each(nodes, fn node -> do_cast(node, module, event, header, body) end)
+
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -113,6 +151,13 @@ defmodule Bytes.RpcClient do
       {:ok, node} -> {:ok, node}
       {:error, "No service available"} -> Registry.probe_healthy_node(server)
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp all_nodes(server) do
+    case Registry.healthy_nodes(server) do
+      [] -> Registry.probe_healthy_nodes(server)
+      nodes -> {:ok, nodes}
     end
   end
 end

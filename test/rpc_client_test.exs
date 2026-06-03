@@ -20,6 +20,55 @@ defmodule Bytes.RpcClientTest do
     assert :ok = Bytes.RpcClient.cast(:ws, @existing_module, @existing_event, %{}, %{})
   end
 
+  test "call_all calls every healthy node in a server group" do
+    nodes = ["unit_call_all_node_1", "unit_call_all_node_2"]
+
+    start_supervised!({Registry, ws: nodes})
+    Enum.each(nodes, &ElixirRpc.TestSupport.start_test_pool/1)
+    Enum.each(nodes, &Registry.mark_node(&1, true))
+
+    assert {:ok, results} =
+             Bytes.RpcClient.call_all(:ws, @existing_module, @existing_event, %{}, %{})
+
+    assert Map.new(results) ==
+             Map.new(nodes, fn node ->
+               {node, {:ok, {@existing_module, @existing_event, %{}, %{}}}}
+             end)
+  end
+
+  test "call_all probes and calls every reachable node when registry has no healthy nodes" do
+    nodes = ["unit_call_all_probe_node_1", "unit_call_all_probe_node_2"]
+
+    start_supervised!({Registry, ws: nodes})
+    Enum.each(nodes, &ElixirRpc.TestSupport.start_test_pool/1)
+
+    assert {:ok, results} =
+             Bytes.RpcClient.call_all(:ws, @existing_module, @existing_event, %{}, %{})
+
+    assert Map.keys(Map.new(results)) |> Enum.sort() == nodes
+  end
+
+  test "cast_all casts every healthy node in a server group" do
+    nodes = ["unit_cast_all_node_1", "unit_cast_all_node_2"]
+
+    start_supervised!({Registry, ws: nodes})
+    Enum.each(nodes, &ElixirRpc.TestSupport.start_test_pool/1)
+    Enum.each(nodes, &Registry.mark_node(&1, true))
+
+    assert :ok = Bytes.RpcClient.cast_all(:ws, @existing_module, @existing_event, %{}, %{})
+    Process.sleep(20)
+  end
+
+  test "call_all and cast_all preserve the no-service error shape" do
+    start_supervised!({Registry, ws: ["unit_missing_all_node"]})
+
+    assert {:error, "No service available"} =
+             Bytes.RpcClient.call_all(:ws, @existing_module, @existing_event, %{}, %{})
+
+    assert {:error, "No service available"} =
+             Bytes.RpcClient.cast_all(:ws, @existing_module, @existing_event, %{}, %{})
+  end
+
   test "do_call and do_cast use the configured node pool directly" do
     node = "unit_direct_node"
     ElixirRpc.TestSupport.start_test_pool(node)

@@ -109,7 +109,9 @@ The public API remains:
 
 ```elixir
 Bytes.RpcClient.call(server, module, event, header \\ %{}, body \\ %{})
+Bytes.RpcClient.call_all(server, module, event, header \\ %{}, body \\ %{})
 Bytes.RpcClient.cast(server, module, event, header \\ %{}, body \\ %{})
+Bytes.RpcClient.cast_all(server, module, event, header \\ %{}, body \\ %{})
 Bytes.RpcClient.broadcast(server, module, event, header \\ %{}, body \\ %{})
 Bytes.RpcClient.do_call(node, module, event, header, body)
 Bytes.RpcClient.do_cast(node, module, event, header, body)
@@ -136,6 +138,30 @@ Bytes.RpcClient.cast(:user, :user, :update_user, %{}, %{id: 123, name: "Jane"})
 ```
 
 `cast/5` returns when the local worker accepts the task. It does not mean the remote server processed the message. Network or remote failures are logged.
+
+Call every currently healthy node in a server group:
+
+```elixir
+Bytes.RpcClient.call_all(:user, :user, :get_user, %{}, %{id: 123})
+```
+
+Example response:
+
+```elixir
+{:ok,
+ [
+   {"user-1", {:ok, %{code: 200, message: "", data: %{id: 123, name: "Jane"}}}},
+   {"user-2", {:ok, %{code: 200, message: "", data: %{id: 123, name: "Jane"}}}}
+ ]}
+```
+
+Cast to every currently healthy node in a server group:
+
+```elixir
+Bytes.RpcClient.cast_all(:user, :user, :refresh_cache, %{}, %{scope: "all"})
+```
+
+If the registry has no healthy node for `call_all/5` or `cast_all/5`, the client performs a direct health probe of the configured nodes before returning `{:error, "No service available"}`.
 
 Broadcast to all currently healthy nodes in a server group:
 
@@ -199,7 +225,11 @@ RPC `module` and `event` strings are converted with `String.to_existing_atom/1`.
 ## Important Semantics
 
 - `call/5` is synchronous and returns the remote response or an error tuple.
+- `call/5` randomly selects one healthy node from the server group.
+- `call_all/5` calls every healthy node in the server group and returns `{:ok, [{node, result}]}`.
 - `cast/5` is fire-and-forget. `:ok` means the local cast task was accepted.
+- `cast/5` randomly selects one healthy node from the server group.
+- `cast_all/5` sends a cast to every healthy node in the server group.
 - `broadcast/5` sends casts to currently healthy nodes only.
 - `module` and `event` must correspond to existing atoms on the server node.
 - Node names in client config should be a fixed, finite set. Pool names are derived from node names.

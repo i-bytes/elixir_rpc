@@ -24,3 +24,6 @@ elixir_grpc-*.tar
 
 # idea
 .idea
+
+# ai
+.codex

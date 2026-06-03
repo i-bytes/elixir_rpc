@@ -105,6 +105,9 @@ defmodule Bytes.Client.Registry do
   def probe_healthy_node(server),
     do: GenServer.call(__MODULE__, {:probe_healthy_node, server}, @heartbeat_timeout + 1_000)
 
+  def probe_healthy_nodes(server),
+    do: GenServer.call(__MODULE__, {:probe_healthy_nodes, server}, @heartbeat_timeout + 1_000)
+
   def mark_node(node, healthy), do: GenServer.cast(__MODULE__, {:mark_node, node, healthy})
 
   @impl true
@@ -123,6 +126,25 @@ defmodule Bytes.Client.Registry do
           case healthy_nodes_from(updated_nodes) do
             [] -> {:error, "No service available"}
             nodes -> {:ok, Enum.random(nodes)}
+          end
+
+        {:reply, reply, Map.put(state, server, updated_nodes)}
+
+      :error ->
+        {:reply, {:error, "No service available"}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:probe_healthy_nodes, server}, _from, state) do
+    case Map.fetch(state, server) do
+      {:ok, nodes} ->
+        updated_nodes = check_nodes(nodes)
+
+        reply =
+          case healthy_nodes_from(updated_nodes) do
+            [] -> {:error, "No service available"}
+            nodes -> {:ok, nodes}
           end
 
         {:reply, reply, Map.put(state, server, updated_nodes)}
