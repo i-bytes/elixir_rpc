@@ -12,16 +12,16 @@ defmodule Bytes.Rpc.Server.Cache do
 
   @key __MODULE__
 
-  def init_cache(services, middlewares) do
+  def init_cache(modules, middlewares) do
     :persistent_term.put(@key, %{
-      services: services,
+      modules: modules,
       middlewares_asc: middlewares,
       middlewares_desc: Enum.reverse(middlewares)
     })
   end
 
-  def get_module(service) do
-    Map.get(:persistent_term.get(@key).services, service, Bytes.Rpc.InternalService)
+  def get_module(name) do
+    Map.get(:persistent_term.get(@key).modules, name)
   end
 
   def get_middlewares(:asc),

@@ -8,8 +8,10 @@
 #  | Author: dangyuzhang <develop@bytes.net.cn>
 #  +----------------------------------------------------------------------
 defmodule Bytes.Client.Dispatcher do
-  def choose_node(:random) do
-    Bytes.Client.Registry.healthy_nodes()
-    |> Enum.random()
+  def choose_node(:random, server) do
+    case Bytes.Client.Registry.healthy_nodes(server) do
+      [] -> {:error, "No service available"}
+      nodes -> {:ok, Enum.random(nodes)}
+    end
   end
 end

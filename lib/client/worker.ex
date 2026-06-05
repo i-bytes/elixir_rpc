@@ -10,6 +10,7 @@
 defmodule Bytes.Client.Worker do
   use GenServer
   require Logger
+  alias Bytes.Client.Registry
   alias Bytes.Rpc.{Meta, Request, Response, Json}
   alias Bytes.Rpc.Route.Stub
 
@@ -17,6 +18,10 @@ defmodule Bytes.Client.Worker do
 
   def rpc_call(pid, service, event, header, body) do
     GenServer.call(pid, {:rpc_call, service, event, header, body})
+  end
+
+  def rpc_call(pid, service, event, header, body, timeout) do
+    GenServer.call(pid, {:rpc_call, service, event, header, body}, timeout)
   end
 
   def rpc_cast(pid, service, event, header, body) do
@@ -31,7 +36,8 @@ defmodule Bytes.Client.Worker do
     state = %{
       host: Keyword.get(opts, :host),
       port: Keyword.get(opts, :port),
-      node: Keyword.get(opts, :node),
+      to: Keyword.get(opts, :to),
+      from: Keyword.get(opts, :from),
       channel: nil,
       connecting: true
     }
@@ -45,22 +51,29 @@ defmodule Bytes.Client.Worker do
 
     case GRPC.Stub.connect("#{state.host}:#{state.port}") do
       {:ok, channel} ->
-        Logger.info("[RpcWorker:#{state.node}] Connected to #{state.host}:#{state.port}")
+        Logger.info("[RpcWorker:#{state.from}] Connected to #{state.host}:#{state.port}")
+        notify_registry(state.to, true)
         {:noreply, %{state | channel: channel, connecting: false}}
 
       {:error, reason} ->
         Logger.error(
-          "[RpcWorker:#{state.node}] Connection failed: #{inspect(reason)}. Retrying in #{@reconnect_interval}ms"
+          "[RpcWorker:#{state.from}] to #{state.to} Connection failed: #{inspect(reason)}. Retrying in #{@reconnect_interval}ms"
         )
 
+        notify_registry(state.to, false)
         Process.send_after(self(), :connect, @reconnect_interval)
         {:noreply, %{state | channel: nil}}
     end
   end
 
-  def handle_info({:gun_down, _, _, :closed, []}, state) do
-    Logger.warning("[RpcWorker:#{state.node}] Disconnected from server, scheduling reconnect...")
-    {:noreply, maybe_schedule_connect(state)}
+  def handle_info({:gun_down, _, _, reason, killed_streams}, state) do
+    Logger.warning(
+      "[RpcWorker:#{state.from}] Disconnected from server: #{inspect(reason)}, streams: #{inspect(killed_streams)}. Scheduling reconnect..."
+    )
+
+    close_channel(state.channel)
+    notify_registry(state.to, false)
+    {:noreply, %{state | channel: nil} |> maybe_schedule_connect()}
   end
 
   def handle_info(_, state) do
@@ -68,16 +81,17 @@ defmodule Bytes.Client.Worker do
   end
 
   def handle_call(_, _from, %{channel: nil} = state) do
+    notify_registry(state.to, false)
     {:reply, {:error, :not_connected}, maybe_schedule_connect(state)}
   end
 
   def handle_call(
-        {:rpc_call, service, event, header, body},
+        {:rpc_call, module, event, header, body},
         _from,
-        %{channel: channel, node: node} = state
+        %{channel: channel, from: from, to: to} = state
       ) do
     request = %Request{
-      meta: %Meta{service: service, event: event, node: node},
+      meta: %Meta{module: module, event: event, node: from},
       header: Json.encode(header),
       body: Json.encode(body)
     }
@@ -87,7 +101,8 @@ defmodule Bytes.Client.Worker do
         {:reply, {:ok, %{code: code, message: msg, data: Json.decode!(data)}}, state}
 
       {:error, reason} ->
-        Logger.warning("[RpcWorker:#{node}] RPC failed: #{inspect(reason)}")
+        Logger.warning("[RpcWorker:#{from}] to #{to} RPC failed: #{inspect(reason)}")
+        notify_registry(to, false)
         {:reply, {:error, reason}, maybe_schedule_connect(state)}
     end
   end
@@ -97,15 +112,16 @@ defmodule Bytes.Client.Worker do
   end
 
   def handle_cast(_, %{channel: nil} = state) do
+    notify_registry(state.to, false)
     {:noreply, maybe_schedule_connect(state)}
   end
 
   def handle_cast(
-        {:rpc_cast, service, event, header, body},
-        %{channel: channel, node: node} = state
+        {:rpc_cast, module, event, header, body},
+        %{channel: channel, from: from, to: to} = state
       ) do
     request = %Request{
-      meta: %Meta{service: service, event: event, node: node},
+      meta: %Meta{module: module, event: event, node: from},
       header: Json.encode(header),
       body: Json.encode(body)
     }
@@ -114,7 +130,7 @@ defmodule Bytes.Client.Worker do
       try do
         Stub.dispatcher(channel, request)
       rescue
-        err -> Logger.error("[RpcWorker:#{node}] Cast failed: #{inspect(err)}")
+        err -> Logger.error("[RpcWorker:#{from}] to #{to} Cast failed: #{inspect(err)}")
       end
     end)
 
@@ -145,5 +161,11 @@ defmodule Bytes.Client.Worker do
     rescue
       _ -> :ok
     end
+  end
+
+  defp notify_registry(node, healthy) do
+    Registry.mark_node(node, healthy)
+  catch
+    :exit, _ -> :ok
   end
 end

@@ -7,6 +7,7 @@ defmodule ElixirGrpc.MixProject do
       version: "1.0.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      test_coverage: [ignore_modules: [Bytes.RpcServer]],
       deps: deps()
     ]
   end
